@@ -1,2 +1,8 @@
-# boardroom-booking-system
-Enterprise Boardroom Booking System built with NestJS, Angular, PostgreSQL, and AWS.
+# Boardroom Booking System
+
+Enterprise boardroom booking system built with:
+
+- NestJS
+- Angular
+- PostgreSQL
+- AWS
