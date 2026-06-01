@@ -228,12 +228,44 @@ tbody td {
   background: none;
   border: none;
   cursor: pointer;
+  color: #2563eb;
   font-size: 0.85rem;
   padding: 4px 8px;
 }
 
+.link:hover {
+  text-decoration: underline;
+}
+
 .link.danger {
   color: #b91c1c;
+}
+
+.muted {
+  color: #94a3b8;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.82rem;
+  color: #475569;
+  cursor: pointer;
+}
+
+.chip.selected {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
 }
 
 .link.danger:disabled {

@@ -4,10 +4,13 @@ import {
   Entity,
   Index,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Amenity } from '../../amenities/entities/amenity.entity';
 import { Boardroom } from '../../boardrooms/entities/boardroom.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -36,6 +39,9 @@ export class Booking {
   @Column({ type: 'timestamptz', name: 'end_time' })
   endTime: Date;
 
+  @Column({ type: 'int', name: 'attendee_count', default: 1 })
+  attendeeCount: number;
+
   @Column({
     type: 'enum',
     enum: BookingStatus,
@@ -58,6 +64,14 @@ export class Booking {
 
   @Column({ type: 'uuid', name: 'booked_by_id', nullable: true })
   bookedById: string | null;
+
+  @ManyToMany(() => Amenity, { eager: true })
+  @JoinTable({
+    name: 'booking_amenities',
+    joinColumn: { name: 'booking_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'amenity_id', referencedColumnName: 'id' },
+  })
+  requestedAmenities: Amenity[];
 
   @CreateDateColumn()
   createdAt: Date;

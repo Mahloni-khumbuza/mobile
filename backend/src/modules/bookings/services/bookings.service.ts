@@ -3,15 +3,17 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { Amenity } from '../../amenities/entities/amenity.entity';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { Boardroom } from '../../boardrooms/entities/boardroom.entity';
 import { BoardroomBlocksService } from '../../boardroom-blocks/services/boardroom-blocks.service';
 import { NotificationType } from '../../notifications/entities/notification.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { SystemSettingsService } from '../../system-settings/services/system-settings.service';
 import { Booking, BookingStatus } from '../entities/booking.entity';
 import { BookingQueryDto } from '../dto/booking-query.dto';
 import { CreateBookingDto } from '../dto/create-booking.dto';
@@ -19,6 +21,18 @@ import { UpdateBookingDto } from '../dto/update-booking.dto';
 
 const ADMIN_ROLES = new Set(['SuperAdmin', 'Admin', 'Manager']);
 const ACTIVE_STATUSES = [BookingStatus.Pending, BookingStatus.Confirmed];
+
+interface BookingRules {
+  operatingHoursStart: string;
+  operatingHoursEnd: string;
+  bufferMinutes: number;
+}
+
+const DEFAULT_RULES: BookingRules = {
+  operatingHoursStart: '08:00',
+  operatingHoursEnd: '18:00',
+  bufferMinutes: 15,
+};
 
 export interface ActorContext {
   id: string;
@@ -32,9 +46,12 @@ export class BookingsService {
     private readonly repo: Repository<Booking>,
     @InjectRepository(Boardroom)
     private readonly boardroomsRepo: Repository<Boardroom>,
+    @InjectRepository(Amenity)
+    private readonly amenitiesRepo: Repository<Amenity>,
     private readonly auditLogs: AuditLogsService,
     private readonly notifications: NotificationsService,
     private readonly blocks: BoardroomBlocksService,
+    private readonly settings: SystemSettingsService,
   ) {}
 
   async findAll(query: BookingQueryDto, actor: ActorContext): Promise<Booking[]> {
@@ -57,7 +74,7 @@ export class BookingsService {
 
     return this.repo.find({
       where,
-      relations: { boardroom: true, bookedBy: true },
+      relations: { boardroom: true, bookedBy: true, requestedAmenities: true },
       order: { startTime: 'ASC' },
       take: 500,
     });
@@ -66,7 +83,7 @@ export class BookingsService {
   async findOne(id: string, actor: ActorContext): Promise<Booking> {
     const booking = await this.repo.findOne({
       where: { id },
-      relations: { boardroom: true, bookedBy: true },
+      relations: { boardroom: true, bookedBy: true, requestedAmenities: true },
     });
     if (!booking) {
       throw new NotFoundException(`Booking ${id} not found`);
@@ -87,7 +104,9 @@ export class BookingsService {
       throw new BadRequestException('endTime must be after startTime');
     }
 
-    const boardroom = await this.boardroomsRepo.findOne({ where: { id: dto.boardroomId } });
+    const boardroom = await this.boardroomsRepo.findOne({
+      where: { id: dto.boardroomId },
+    });
     if (!boardroom) {
       throw new BadRequestException(`Boardroom ${dto.boardroomId} not found`);
     }
@@ -95,7 +114,20 @@ export class BookingsService {
       throw new BadRequestException(`Boardroom "${boardroom.name}" is not active`);
     }
 
-    await this.assertNoConflict(boardroom.id, start, end);
+    if (dto.attendeeCount > boardroom.capacity) {
+      throw new BadRequestException(
+        `Attendee count (${dto.attendeeCount}) exceeds boardroom capacity (${boardroom.capacity})`,
+      );
+    }
+
+    const rules = await this.loadRules();
+    this.assertWithinOperatingHours(start, end, rules);
+    await this.assertNoConflict(boardroom.id, start, end, undefined, rules.bufferMinutes);
+
+    const requestedAmenities = await this.resolveRequestedAmenities(
+      dto.requestedAmenityIds,
+      boardroom.id,
+    );
 
     const initialStatus = this.isAdmin(actor)
       ? BookingStatus.Confirmed
@@ -106,9 +138,11 @@ export class BookingsService {
       description: dto.description?.trim() || null,
       startTime: start,
       endTime: end,
+      attendeeCount: dto.attendeeCount,
       status: initialStatus,
       boardroomId: boardroom.id,
       bookedById: actor.id,
+      requestedAmenities,
     });
     const saved = await this.repo.save(booking);
 
@@ -117,7 +151,13 @@ export class BookingsService {
       entity: 'booking',
       entityId: saved.id,
       actorId: actor.id,
-      metadata: { title: saved.title, status: saved.status, boardroomId: boardroom.id },
+      metadata: {
+        title: saved.title,
+        status: saved.status,
+        boardroomId: boardroom.id,
+        attendeeCount: saved.attendeeCount,
+        requestedAmenityIds: requestedAmenities.map((a) => a.id),
+      },
     });
 
     await this.notifications.notify({
@@ -146,8 +186,32 @@ export class BookingsService {
       throw new BadRequestException('endTime must be after startTime');
     }
 
+    if (dto.attendeeCount !== undefined) {
+      if (dto.attendeeCount > booking.boardroom.capacity) {
+        throw new BadRequestException(
+          `Attendee count (${dto.attendeeCount}) exceeds boardroom capacity (${booking.boardroom.capacity})`,
+        );
+      }
+      booking.attendeeCount = dto.attendeeCount;
+    }
+
+    const rules = await this.loadRules();
     if (dto.startTime || dto.endTime) {
-      await this.assertNoConflict(booking.boardroomId, start, end, booking.id);
+      this.assertWithinOperatingHours(start, end, rules);
+      await this.assertNoConflict(
+        booking.boardroomId,
+        start,
+        end,
+        booking.id,
+        rules.bufferMinutes,
+      );
+    }
+
+    if (dto.requestedAmenityIds !== undefined) {
+      booking.requestedAmenities = await this.resolveRequestedAmenities(
+        dto.requestedAmenityIds,
+        booking.boardroomId,
+      );
     }
 
     if (dto.title !== undefined) booking.title = dto.title.trim();
@@ -168,7 +232,7 @@ export class BookingsService {
   async approve(id: string, actor: ActorContext): Promise<Booking> {
     const booking = await this.repo.findOne({
       where: { id },
-      relations: { boardroom: true, bookedBy: true },
+      relations: { boardroom: true, bookedBy: true, requestedAmenities: true },
     });
     if (!booking) throw new NotFoundException(`Booking ${id} not found`);
     if (booking.status !== BookingStatus.Pending) {
@@ -199,7 +263,7 @@ export class BookingsService {
   async cancel(id: string, actor: ActorContext): Promise<Booking> {
     const booking = await this.repo.findOne({
       where: { id },
-      relations: { boardroom: true, bookedBy: true },
+      relations: { boardroom: true, bookedBy: true, requestedAmenities: true },
     });
     if (!booking) throw new NotFoundException(`Booking ${id} not found`);
     if (!this.isAdmin(actor) && booking.bookedById !== actor.id) {
@@ -244,11 +308,61 @@ export class BookingsService {
     });
   }
 
+  private async loadRules(): Promise<BookingRules> {
+    const [start, end, buffer] = await Promise.all([
+      this.settings.findByKey('booking.operating_hours_start'),
+      this.settings.findByKey('booking.operating_hours_end'),
+      this.settings.findByKey('booking.buffer_minutes'),
+    ]);
+    return {
+      operatingHoursStart: start?.value ?? DEFAULT_RULES.operatingHoursStart,
+      operatingHoursEnd: end?.value ?? DEFAULT_RULES.operatingHoursEnd,
+      bufferMinutes: Number(buffer?.value ?? DEFAULT_RULES.bufferMinutes),
+    };
+  }
+
+  private assertWithinOperatingHours(start: Date, end: Date, rules: BookingRules): void {
+    const [startH, startM] = rules.operatingHoursStart.split(':').map(Number);
+    const [endH, endM] = rules.operatingHoursEnd.split(':').map(Number);
+
+    const bookingStartMinutes = start.getHours() * 60 + start.getMinutes();
+    const bookingEndMinutes = end.getHours() * 60 + end.getMinutes();
+    const opStart = startH * 60 + startM;
+    const opEnd = endH * 60 + endM;
+
+    if (bookingStartMinutes < opStart || bookingEndMinutes > opEnd) {
+      throw new BadRequestException(
+        `Bookings must be between ${rules.operatingHoursStart} and ${rules.operatingHoursEnd}`,
+      );
+    }
+  }
+
+  private async resolveRequestedAmenities(
+    requestedIds: string[] | undefined,
+    boardroomId: string,
+  ): Promise<Amenity[]> {
+    if (!requestedIds || requestedIds.length === 0) {
+      return [];
+    }
+    const roomWithAmenities = await this.boardroomsRepo.findOne({
+      where: { id: boardroomId },
+    });
+    const roomAmenityIds = new Set((roomWithAmenities?.amenities ?? []).map((a) => a.id));
+    const notInRoom = requestedIds.filter((id) => !roomAmenityIds.has(id));
+    if (notInRoom.length > 0) {
+      throw new BadRequestException(
+        `Requested amenities not available in this boardroom: ${notInRoom.join(', ')}`,
+      );
+    }
+    return this.amenitiesRepo.find({ where: { id: In(requestedIds) } });
+  }
+
   private async assertNoConflict(
     boardroomId: string,
     start: Date,
     end: Date,
-    excludeId?: string,
+    excludeId: string | undefined,
+    bufferMinutes: number,
   ): Promise<void> {
     const block = await this.blocks.findOverlapping(boardroomId, start, end);
     if (block) {
@@ -257,18 +371,27 @@ export class BookingsService {
       );
     }
 
+    const bufferMs = bufferMinutes * 60 * 1000;
+    const expandedStart = new Date(start.getTime() - bufferMs);
+    const expandedEnd = new Date(end.getTime() + bufferMs);
+
     const qb = this.repo
       .createQueryBuilder('b')
       .where('b.boardroomId = :boardroomId', { boardroomId })
       .andWhere('b.status IN (:...statuses)', { statuses: ACTIVE_STATUSES })
-      .andWhere('b.startTime < :end AND b.endTime > :start', { start, end });
+      .andWhere('b.startTime < :end AND b.endTime > :start', {
+        start: expandedStart,
+        end: expandedEnd,
+      });
     if (excludeId) {
       qb.andWhere('b.id != :excludeId', { excludeId });
     }
     const conflict = await qb.getOne();
     if (conflict) {
+      const conflictStart = conflict.startTime.toISOString();
+      const conflictEnd = conflict.endTime.toISOString();
       throw new ConflictException(
-        `Booking conflicts with existing booking "${conflict.title}" from ${conflict.startTime.toISOString()} to ${conflict.endTime.toISOString()}`,
+        `Booking conflicts (with ${bufferMinutes}-min buffer) with existing booking "${conflict.title}" from ${conflictStart} to ${conflictEnd}`,
       );
     }
   }
@@ -276,7 +399,7 @@ export class BookingsService {
   private async reload(id: string): Promise<Booking> {
     const fresh = await this.repo.findOne({
       where: { id },
-      relations: { boardroom: true, bookedBy: true },
+      relations: { boardroom: true, bookedBy: true, requestedAmenities: true },
     });
     if (!fresh) throw new NotFoundException(`Booking ${id} disappeared`);
     return fresh;

@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Permission } from '../../modules/permissions/entities/permission.entity';
 import { Role } from '../../modules/roles/entities/role.entity';
+import { SystemSetting } from '../../modules/system-settings/entities/system-setting.entity';
 import { User } from '../../modules/users/entities/user.entity';
 
 interface SeedRoleDefinition {
@@ -112,6 +113,8 @@ export class SeederService implements OnApplicationBootstrap {
     private readonly rolesRepository: Repository<Role>,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(SystemSetting)
+    private readonly systemSettingsRepository: Repository<SystemSetting>,
     private readonly configService: ConfigService,
   ) {}
 
@@ -120,11 +123,45 @@ export class SeederService implements OnApplicationBootstrap {
       await this.seedPermissions();
       const roles = await this.seedRoles();
       await this.seedSuperAdmin(roles);
+      await this.seedBookingRules();
     } catch (err) {
       this.logger.error(
         'Database seeding failed',
         err instanceof Error ? err.stack : String(err),
       );
+    }
+  }
+
+  private async seedBookingRules(): Promise<void> {
+    const defaults: Array<{ key: string; value: string; description: string }> = [
+      {
+        key: 'booking.operating_hours_start',
+        value: '08:00',
+        description: 'Earliest time a booking can start (HH:MM, 24h)',
+      },
+      {
+        key: 'booking.operating_hours_end',
+        value: '18:00',
+        description: 'Latest time a booking can end (HH:MM, 24h)',
+      },
+      {
+        key: 'booking.buffer_minutes',
+        value: '15',
+        description: 'Minimum minutes required between consecutive bookings in the same boardroom',
+      },
+    ];
+    for (const def of defaults) {
+      const existing = await this.systemSettingsRepository.findOne({ where: { key: def.key } });
+      if (existing) {
+        continue;
+      }
+      const setting = this.systemSettingsRepository.create({
+        key: def.key,
+        value: def.value,
+        description: def.description,
+      });
+      await this.systemSettingsRepository.save(setting);
+      this.logger.log(`Seeded system setting "${def.key}" = ${def.value}`);
     }
   }
 

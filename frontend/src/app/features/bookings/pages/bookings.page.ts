@@ -1,10 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
 import { AuthService } from '../../auth/services/auth.service';
-import { Boardroom } from '../../boardrooms/models/boardroom.model';
+import { Amenity, Boardroom } from '../../boardrooms/models/boardroom.model';
 import { BoardroomsService } from '../../boardrooms/services/boardrooms.service';
 import { Booking, BookingStatus } from '../models/booking.model';
 import { BookingsService } from '../services/bookings.service';
@@ -34,8 +34,11 @@ export class BookingsPage {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly busyId = signal<string | null>(null);
+  readonly editingId = signal<string | null>(null);
   readonly showCreate = signal(false);
-  readonly creating = signal(false);
+  readonly saving = signal(false);
+  readonly selectedAmenityIds = signal<Set<string>>(new Set());
+  readonly selectedBoardroomId = signal<string>('');
 
   readonly statusFilter = signal<BookingStatus | ''>('');
   readonly boardroomFilter = signal<string>('');
@@ -55,16 +58,33 @@ export class BookingsPage {
     return list;
   });
 
-  readonly createForm = this.fb.nonNullable.group({
+  readonly selectedBoardroom = computed<Boardroom | null>(() => {
+    const id = this.selectedBoardroomId();
+    return this.boardrooms().find((r) => r.id === id) ?? null;
+  });
+
+  readonly availableAmenities = computed<Amenity[]>(
+    () => this.selectedBoardroom()?.amenities ?? []
+  );
+
+  readonly form = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(200)]],
     description: [''],
     boardroomId: ['', [Validators.required]],
     startTime: ['', [Validators.required]],
-    endTime: ['', [Validators.required]]
+    endTime: ['', [Validators.required]],
+    attendeeCount: new FormControl<number>(1, {
+      nonNullable: true,
+      validators: [Validators.required, Validators.min(1)]
+    })
   });
 
   constructor() {
     this.refresh();
+    this.form.controls.boardroomId.valueChanges.subscribe((id) => {
+      this.selectedBoardroomId.set(id);
+      this.selectedAmenityIds.set(new Set());
+    });
   }
 
   refresh(): void {
@@ -100,50 +120,102 @@ export class BookingsPage {
     this.boardroomFilter.set(value);
   }
 
-  toggleCreate(): void {
-    if (this.showCreate()) {
-      this.showCreate.set(false);
+  toggleAmenity(id: string): void {
+    const set = new Set(this.selectedAmenityIds());
+    if (set.has(id)) {
+      set.delete(id);
     } else {
-      const defaultStart = roundedNow(60);
-      const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
-      this.createForm.reset({
-        title: '',
-        description: '',
-        boardroomId: '',
-        startTime: toLocalInput(defaultStart),
-        endTime: toLocalInput(defaultEnd)
-      });
-      this.showCreate.set(true);
+      set.add(id);
     }
+    this.selectedAmenityIds.set(set);
   }
 
-  submitCreate(): void {
-    if (this.createForm.invalid || this.creating()) {
-      this.createForm.markAllAsTouched();
+  isAmenitySelected(id: string): boolean {
+    return this.selectedAmenityIds().has(id);
+  }
+
+  openCreate(): void {
+    this.editingId.set(null);
+    const start = roundedNow(60);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    this.form.reset({
+      title: '',
+      description: '',
+      boardroomId: '',
+      startTime: toLocalInput(start),
+      endTime: toLocalInput(end),
+      attendeeCount: 1
+    });
+    this.form.controls.boardroomId.enable();
+    this.selectedAmenityIds.set(new Set());
+    this.selectedBoardroomId.set('');
+    this.showCreate.set(true);
+  }
+
+  openEdit(booking: Booking): void {
+    this.editingId.set(booking.id);
+    this.form.reset({
+      title: booking.title,
+      description: booking.description ?? '',
+      boardroomId: booking.boardroom.id,
+      startTime: toLocalInput(new Date(booking.startTime)),
+      endTime: toLocalInput(new Date(booking.endTime)),
+      attendeeCount: booking.attendeeCount
+    });
+    this.form.controls.boardroomId.disable();
+    this.selectedBoardroomId.set(booking.boardroom.id);
+    this.selectedAmenityIds.set(new Set(booking.requestedAmenities.map((a) => a.id)));
+    this.showCreate.set(true);
+  }
+
+  closeForm(): void {
+    this.showCreate.set(false);
+    this.editingId.set(null);
+    this.form.controls.boardroomId.enable();
+  }
+
+  submitForm(): void {
+    if (this.form.invalid || this.saving()) {
+      this.form.markAllAsTouched();
       return;
     }
-    this.creating.set(true);
+    this.saving.set(true);
     this.error.set(null);
-    const raw = this.createForm.getRawValue();
-    this.service
-      .create({
-        title: raw.title.trim(),
-        description: raw.description?.trim() || undefined,
-        boardroomId: raw.boardroomId,
-        startTime: new Date(raw.startTime).toISOString(),
-        endTime: new Date(raw.endTime).toISOString()
-      })
-      .subscribe({
-        next: () => {
-          this.creating.set(false);
-          this.showCreate.set(false);
-          this.refresh();
-        },
-        error: (err) => {
-          this.error.set(this.errorMessage(err));
-          this.creating.set(false);
-        }
-      });
+
+    const raw = this.form.getRawValue();
+    const id = this.editingId();
+    const amenityIds = Array.from(this.selectedAmenityIds());
+
+    const request$ = id
+      ? this.service.update(id, {
+          title: raw.title.trim(),
+          description: raw.description?.trim() || undefined,
+          startTime: new Date(raw.startTime).toISOString(),
+          endTime: new Date(raw.endTime).toISOString(),
+          attendeeCount: Number(raw.attendeeCount),
+          requestedAmenityIds: amenityIds
+        })
+      : this.service.create({
+          title: raw.title.trim(),
+          description: raw.description?.trim() || undefined,
+          boardroomId: raw.boardroomId,
+          startTime: new Date(raw.startTime).toISOString(),
+          endTime: new Date(raw.endTime).toISOString(),
+          attendeeCount: Number(raw.attendeeCount),
+          requestedAmenityIds: amenityIds.length > 0 ? amenityIds : undefined
+        });
+
+    request$.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.closeForm();
+        this.refresh();
+      },
+      error: (err) => {
+        this.error.set(this.errorMessage(err));
+        this.saving.set(false);
+      }
+    });
   }
 
   approve(booking: Booking): void {
@@ -171,6 +243,11 @@ export class BookingsPage {
 
   canApprove(booking: Booking): boolean {
     return this.isAdmin() && booking.status === 'pending';
+  }
+
+  canEdit(booking: Booking): boolean {
+    if (booking.status === 'cancelled' || booking.status === 'completed') return false;
+    return this.isAdmin() || booking.bookedBy?.id === this.currentUserId();
   }
 
   canCancel(booking: Booking): boolean {

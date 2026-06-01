@@ -2,8 +2,10 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 
-import { Boardroom } from '../models/boardroom.model';
+import { Amenity, Boardroom } from '../models/boardroom.model';
+import { AmenitiesService } from '../services/amenities.service';
 import { BoardroomsService } from '../services/boardrooms.service';
 
 @Component({
@@ -15,18 +17,32 @@ import { BoardroomsService } from '../services/boardrooms.service';
 })
 export class BrowseBoardroomsPage {
   private readonly boardroomsService = inject(BoardroomsService);
+  private readonly amenitiesService = inject(AmenitiesService);
 
   readonly boardrooms = signal<Boardroom[]>([]);
+  readonly allAmenities = signal<Amenity[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly search = signal('');
   readonly minCapacity = signal<number | null>(null);
+  readonly location = signal('');
+  readonly selectedAmenityIds = signal<Set<string>>(new Set());
 
   readonly filtered = computed(() => {
     const q = this.search().trim().toLowerCase();
     const min = this.minCapacity();
+    const loc = this.location().trim().toLowerCase();
+    const amenityIds = this.selectedAmenityIds();
+
     return this.boardrooms().filter((r) => {
       if (min !== null && r.capacity < min) return false;
+      if (loc && !(r.location ?? '').toLowerCase().includes(loc)) return false;
+      if (amenityIds.size > 0) {
+        const roomAmenities = new Set(r.amenities.map((a) => a.id));
+        for (const required of amenityIds) {
+          if (!roomAmenities.has(required)) return false;
+        }
+      }
       if (!q) return true;
       return (
         r.name.toLowerCase().includes(q) ||
@@ -44,9 +60,13 @@ export class BrowseBoardroomsPage {
   refresh(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.boardroomsService.list(true).subscribe({
-      next: (list) => {
-        this.boardrooms.set(list);
+    forkJoin({
+      rooms: this.boardroomsService.list(true),
+      amenities: this.amenitiesService.list()
+    }).subscribe({
+      next: ({ rooms, amenities }) => {
+        this.boardrooms.set(rooms);
+        this.allAmenities.set(amenities);
         this.loading.set(false);
       },
       error: (err) => {
@@ -60,9 +80,34 @@ export class BrowseBoardroomsPage {
     this.search.set(value);
   }
 
+  setLocation(value: string): void {
+    this.location.set(value);
+  }
+
   setMinCapacity(value: string): void {
     const n = value === '' ? null : Number(value);
     this.minCapacity.set(Number.isFinite(n) ? n : null);
+  }
+
+  toggleAmenity(id: string): void {
+    const set = new Set(this.selectedAmenityIds());
+    if (set.has(id)) {
+      set.delete(id);
+    } else {
+      set.add(id);
+    }
+    this.selectedAmenityIds.set(set);
+  }
+
+  isAmenitySelected(id: string): boolean {
+    return this.selectedAmenityIds().has(id);
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.location.set('');
+    this.minCapacity.set(null);
+    this.selectedAmenityIds.set(new Set());
   }
 
   private errorMessage(err: unknown): string {

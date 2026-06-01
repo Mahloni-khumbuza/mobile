@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { AmenityResponseDto } from '../../amenities/dto/amenity-response.dto';
 import { BookingStatus } from '../entities/booking.entity';
 
 export class BookingBoardroomDto {
@@ -45,6 +46,9 @@ export class BookingResponseDto {
   @ApiProperty()
   endTime: Date;
 
+  @ApiProperty()
+  attendeeCount: number;
+
   @ApiProperty({ enum: BookingStatus })
   status: BookingStatus;
 
@@ -53,6 +57,9 @@ export class BookingResponseDto {
 
   @ApiProperty({ type: BookingActorDto, nullable: true })
   bookedBy: BookingActorDto | null;
+
+  @ApiProperty({ type: [AmenityResponseDto] })
+  requestedAmenities: AmenityResponseDto[];
 
   @ApiProperty()
   createdAt: Date;

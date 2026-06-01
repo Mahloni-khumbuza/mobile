@@ -103,3 +103,83 @@
   background: #fee2e2;
   color: #991b1b;
 }
+
+.availability-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.day {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+
+.day:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.day-head {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.free {
+  margin: 4px 0;
+  color: #10b981;
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+.entries {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.85rem;
+  color: #1e40af;
+  white-space: nowrap;
+}
+
+.dash {
+  color: #94a3b8;
+}
+
+.body {
+  font-size: 0.9rem;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}

@@ -11,9 +11,18 @@
       <span>Search</span>
       <input
         type="search"
-        placeholder="Name, location, amenity…"
+        placeholder="Name, description…"
         [ngModel]="search()"
         (ngModelChange)="setSearch($event)"
+      />
+    </label>
+    <label class="field small">
+      <span>Location</span>
+      <input
+        type="text"
+        placeholder="Floor, wing…"
+        [ngModel]="location()"
+        (ngModelChange)="setLocation($event)"
       />
     </label>
     <label class="field small">
@@ -27,6 +36,29 @@
       />
     </label>
   </div>
+
+  @if (allAmenities().length > 0) {
+    <div class="amenity-filter">
+      <div class="amenity-filter-head">
+        <span>Required amenities</span>
+        @if (selectedAmenityIds().size > 0) {
+          <button type="button" class="link" (click)="clearFilters()">Clear all</button>
+        }
+      </div>
+      <div class="chip-list">
+        @for (a of allAmenities(); track a.id) {
+          <button
+            type="button"
+            class="chip-btn"
+            [class.selected]="isAmenitySelected(a.id)"
+            (click)="toggleAmenity(a.id)"
+          >
+            {{ a.name }}
+          </button>
+        }
+      </div>
+    </div>
+  }
 
   @if (error(); as err) {
     <div class="banner error">{{ err }}</div>

@@ -38,5 +38,39 @@
         }
       </section>
     </article>
+
+    <article class="detail">
+      <header class="head">
+        <h2 class="availability-title">Availability (next 7 days)</h2>
+      </header>
+      <div class="agenda">
+        @for (day of days(); track day.label) {
+          <section class="day">
+            <header class="day-head">{{ day.label }}</header>
+            @if (day.bookings.length === 0) {
+              <p class="free">Available all day</p>
+            } @else {
+              <ol class="entries">
+                @for (b of day.bookings; track b.id) {
+                  <li class="entry">
+                    <div class="time">
+                      {{ b.startTime | date: 'shortTime' }}
+                      <span class="dash">–</span>
+                      {{ b.endTime | date: 'shortTime' }}
+                    </div>
+                    <div class="body">
+                      <strong>{{ b.title }}</strong>
+                      @if (b.status === 'pending') {
+                        <span class="badge pending">Pending</span>
+                      }
+                    </div>
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+        }
+      </div>
+    </article>
   }
 </section>

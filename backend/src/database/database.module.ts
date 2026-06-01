@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Permission } from '../modules/permissions/entities/permission.entity';
 import { Role } from '../modules/roles/entities/role.entity';
+import { SystemSetting } from '../modules/system-settings/entities/system-setting.entity';
 import { User } from '../modules/users/entities/user.entity';
 import { SeederService } from './seeds/seeder.service';
 
@@ -25,7 +26,7 @@ import { SeederService } from './seeds/seeder.service';
           configService.get<string>('DB_LOGGING', 'false').toLowerCase() === 'true',
       }),
     }),
-    TypeOrmModule.forFeature([Permission, Role, User]),
+    TypeOrmModule.forFeature([Permission, Role, User, SystemSetting]),
   ],
   providers: [SeederService],
 })

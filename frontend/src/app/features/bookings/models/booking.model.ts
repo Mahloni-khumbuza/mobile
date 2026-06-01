@@ -1,3 +1,5 @@
+import { Amenity } from '../../boardrooms/models/boardroom.model';
+
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
 export interface BookingBoardroom {
@@ -20,9 +22,11 @@ export interface Booking {
   description: string | null;
   startTime: string;
   endTime: string;
+  attendeeCount: number;
   status: BookingStatus;
   boardroom: BookingBoardroom;
   bookedBy: BookingActor | null;
+  requestedAmenities: Amenity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +37,8 @@ export interface BookingCreateRequest {
   boardroomId: string;
   startTime: string;
   endTime: string;
+  attendeeCount: number;
+  requestedAmenityIds?: string[];
 }
 
 export interface BookingUpdateRequest {
@@ -40,6 +46,8 @@ export interface BookingUpdateRequest {
   description?: string;
   startTime?: string;
   endTime?: string;
+  attendeeCount?: number;
+  requestedAmenityIds?: string[];
 }
 
 export interface BookingQuery {
