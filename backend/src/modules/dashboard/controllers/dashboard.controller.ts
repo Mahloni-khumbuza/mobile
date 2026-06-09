@@ -1,12 +1,21 @@
-import { Controller, ForbiddenException, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { Permissions } from '../../../shared/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../../shared/guards/permissions.guard';
+import { Permission } from '../../../shared/constants/permissions';
 import {
   DashboardStatsDto,
   EmployeeDashboardStatsDto,
 } from '../dto/dashboard-stats.dto';
+import {
+  BookingsByDepartmentDto,
+  CancellationReportDto,
+  PeakHourDto,
+  ReportingQueryDto,
+  RoomUsageRankDto,
+  RoomUtilisationDto,
+} from '../dto/reporting.dto';
 import { DashboardService } from '../services/dashboard.service';
 
 const ADMIN_ROLES = new Set(['SuperAdmin', 'Admin', 'FacilitiesManager']);
@@ -23,20 +32,79 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get('admin')
-  @Permissions('dashboard:read')
+  @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Get admin dashboard stats', operationId: 'getAdminDashboard' })
   @ApiOkResponse({ type: DashboardStatsDto })
   getAdmin(@Req() req: AuthedRequest): Promise<DashboardStatsDto> {
-    if (!req.user.role || !ADMIN_ROLES.has(req.user.role)) {
-      throw new ForbiddenException('Admin-tier role required');
-    }
+    this.requireAdmin(req);
     return this.service.getAdminStats();
   }
 
   @Get('me')
+  @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Get personal dashboard stats', operationId: 'getMyDashboard' })
   @ApiOkResponse({ type: EmployeeDashboardStatsDto })
   getMe(@Req() req: AuthedRequest): Promise<EmployeeDashboardStatsDto> {
     return this.service.getEmployeeStats(req.user.sub);
+  }
+
+  @Get('reports/utilisation')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Room utilisation report', operationId: 'getUtilisationReport' })
+  @ApiOkResponse({ type: [RoomUtilisationDto] })
+  getUtilisation(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUtilisationDto[]> {
+    this.requireAdmin(req);
+    return this.service.getRoomUtilisation(query);
+  }
+
+  @Get('reports/by-department')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Bookings grouped by department', operationId: 'getBookingsByDepartment' })
+  @ApiOkResponse({ type: [BookingsByDepartmentDto] })
+  getByDepartment(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<BookingsByDepartmentDto[]> {
+    this.requireAdmin(req);
+    return this.service.getBookingsByDepartment(query);
+  }
+
+  @Get('reports/peak-hours')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Peak booking hours', operationId: 'getPeakHours' })
+  @ApiOkResponse({ type: [PeakHourDto] })
+  getPeakHours(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<PeakHourDto[]> {
+    this.requireAdmin(req);
+    return this.service.getPeakHours(query);
+  }
+
+  @Get('reports/most-used')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Most-used boardrooms', operationId: 'getMostUsedRooms' })
+  @ApiOkResponse({ type: [RoomUsageRankDto] })
+  getMostUsed(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUsageRankDto[]> {
+    this.requireAdmin(req);
+    return this.service.getMostUsedRooms(query);
+  }
+
+  @Get('reports/least-used')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Least-used boardrooms', operationId: 'getLeastUsedRooms' })
+  @ApiOkResponse({ type: [RoomUsageRankDto] })
+  getLeastUsed(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUsageRankDto[]> {
+    this.requireAdmin(req);
+    return this.service.getLeastUsedRooms(query);
+  }
+
+  @Get('reports/cancellations')
+  @Permissions(Permission.DASHBOARD_READ)
+  @ApiOperation({ summary: 'Cancellation and no-show report', operationId: 'getCancellationReport' })
+  @ApiOkResponse({ type: CancellationReportDto })
+  getCancellations(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<CancellationReportDto> {
+    this.requireAdmin(req);
+    return this.service.getCancellationReport(query);
+  }
+
+  private requireAdmin(req: AuthedRequest): void {
+    if (!req.user.role || !ADMIN_ROLES.has(req.user.role)) {
+      throw new ForbiddenException('Admin-tier role required');
+    }
   }
 }

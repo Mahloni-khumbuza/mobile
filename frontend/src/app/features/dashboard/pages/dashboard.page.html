@@ -99,6 +99,111 @@
       </div>
     </div>
 
+    <!-- ── Reporting section ── -->
+    <h2 class="section-heading">Operational Reports</h2>
+
+    @if (cancellations(); as cr) {
+      <div class="stats-grid report-summary">
+        <div class="stat-card accent-rose">
+          <div class="stat-icon si-rose"><lucide-icon [img]="Icons.XCircle" class="si-icon" /></div>
+          <div class="stat-body">
+            <div class="stat-value">{{ cr.cancellationRatePct }}%</div>
+            <div class="stat-label">Cancellation rate</div>
+          </div>
+        </div>
+        <div class="stat-card accent-amber">
+          <div class="stat-icon si-amber"><lucide-icon [img]="Icons.Clock" class="si-icon" /></div>
+          <div class="stat-body">
+            <div class="stat-value">{{ cr.noShowEstimate }}</div>
+            <div class="stat-label">No-shows (estimate)</div>
+          </div>
+        </div>
+        <div class="stat-card accent-indigo">
+          <div class="stat-icon si-indigo"><lucide-icon [img]="Icons.BookOpen" class="si-icon" /></div>
+          <div class="stat-body">
+            <div class="stat-value">{{ cr.totalCancelled }} / {{ cr.totalBookings }}</div>
+            <div class="stat-label">Cancelled / total</div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <div class="dashboard-grid">
+      <!-- Room utilisation -->
+      <div class="card">
+        <h2 class="card-title"><lucide-icon [img]="Icons.TrendingUp" class="card-title-icon" /> Room utilisation</h2>
+        @if (utilisation().length === 0) {
+          <div class="empty-inner">No data for this period.</div>
+        } @else {
+          <div class="util-table">
+            @for (r of utilisation(); track r.boardroomId) {
+              <div class="util-row">
+                <span class="util-name">{{ r.boardroomName }}</span>
+                <div class="util-bar-wrap">
+                  <div class="util-bar" [style.width.%]="r.utilisationPct"></div>
+                </div>
+                <span class="util-pct">{{ r.utilisationPct }}%</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Peak hours -->
+      <div class="card">
+        <h2 class="card-title"><lucide-icon [img]="Icons.BarChart2" class="card-title-icon" /> Peak booking hours</h2>
+        @if (peakHours().length === 0) {
+          <div class="empty-inner">No data for this period.</div>
+        } @else {
+          <div class="peak-chart">
+            @for (h of peakHours(); track h.hour) {
+              <div class="peak-col">
+                <div class="peak-bar-wrap">
+                  <div class="peak-bar" [style.height.%]="(h.bookingCount / maxPeakCount()) * 100"></div>
+                </div>
+                <div class="peak-label">{{ h.hour }}:00</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Most used rooms -->
+      <div class="card">
+        <h2 class="card-title">Most-used rooms (this period)</h2>
+        @if (mostUsed().length === 0) {
+          <div class="empty-inner">No data yet.</div>
+        } @else {
+          <ol class="rank-list">
+            @for (r of mostUsed(); track r.boardroomId; let i = $index) {
+              <li class="rank-item">
+                <span class="rank-pos">{{ i + 1 }}</span>
+                <span class="rank-name">{{ r.boardroomName }}</span>
+                <span class="rank-count">{{ r.bookingCount }} bookings</span>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+
+      <!-- Bookings by department -->
+      <div class="card">
+        <h2 class="card-title">Bookings by department</h2>
+        @if (byDepartment().length === 0) {
+          <div class="empty-inner">No data yet.</div>
+        } @else {
+          <div class="dept-table">
+            @for (d of byDepartment(); track d.department) {
+              <div class="dept-row">
+                <span class="dept-name">{{ d.department }}</span>
+                <span class="dept-count">{{ d.bookingCount }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
   } @else if (!isAdmin() && employeeStats(); as s) {
 
     <div class="stats-grid">
