@@ -1,0 +1,158 @@
+<section class="page">
+  <header class="head">
+    <div>
+      <h1>
+        @if (userName()?.firstName) {
+          Good {{ timeOfDay() }}, {{ userName()?.firstName }} 👋
+        } @else {
+          Dashboard
+        }
+      </h1>
+      <p class="lede">
+        @if (isAdmin()) { Here's the state of the system at a glance. }
+        @else { Here's a summary of your activity. }
+      </p>
+    </div>
+    @if (!isAdmin()) {
+      <a class="btn-new-booking" [routerLink]="['/employee/bookings']">+ New Booking</a>
+    }
+
+  </header>
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  @if (loading()) {
+    <app-spinner label="Loading dashboard…" />
+
+  } @else if (isAdmin() && adminStats(); as s) {
+
+    <div class="stats-grid">
+      <div class="stat-card accent-blue">
+        <div class="stat-icon si-blue"><lucide-icon [img]="Icons.Users" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.totalUsers }}</div>
+          <div class="stat-label">Total users</div>
+        </div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-icon si-green"><lucide-icon [img]="Icons.DoorOpen" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.activeBoardrooms }}<span class="stat-total"> / {{ s.totalBoardrooms }}</span></div>
+          <div class="stat-label">Active rooms</div>
+        </div>
+      </div>
+      <div class="stat-card accent-indigo">
+        <div class="stat-icon si-indigo"><lucide-icon [img]="Icons.CalendarDays" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.bookingsToday }}</div>
+          <div class="stat-label">Bookings today</div>
+        </div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-icon si-amber"><lucide-icon [img]="Icons.Clock" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.bookingsByStatus.pending }}</div>
+          <div class="stat-label">Pending approval</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <div class="card">
+        <h2 class="card-title">Bookings by status</h2>
+        <div class="status-bars">
+          @for (item of statusItems(s); track item.label) {
+            <div class="status-row">
+              <div class="status-row-label">
+                <span class="dot dot-{{ item.key }}"></span>
+                {{ item.label }}
+              </div>
+              <div class="status-row-bar-wrap">
+                <div class="status-row-bar" [style.width.%]="item.pct" [class]="'bar-' + item.key"></div>
+              </div>
+              <span class="status-row-count">{{ item.count }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Next confirmed bookings</h2>
+        @if (s.upcomingBookings.length === 0) {
+          <div class="empty-inner">Nothing on the calendar yet.</div>
+        } @else {
+          <ol class="upcoming-list">
+            @for (b of s.upcomingBookings; track b.id) {
+              <li class="upcoming-item">
+                <div class="upcoming-time">{{ b.startTime | date:'dd MMM · HH:mm' }}</div>
+                <div class="upcoming-detail">
+                  <strong>{{ b.title }}</strong>
+                  <span class="upcoming-room">{{ b.boardroomName }}</span>
+                </div>
+                <span class="status status-{{ b.status }}">{{ b.status }}</span>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </div>
+
+  } @else if (!isAdmin() && employeeStats(); as s) {
+
+    <div class="stats-grid">
+      <div class="stat-card accent-indigo">
+        <div class="stat-icon si-indigo"><lucide-icon [img]="Icons.CalendarDays" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.myUpcomingBookings }}</div>
+          <div class="stat-label">Upcoming bookings</div>
+        </div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-icon si-amber"><lucide-icon [img]="Icons.Clock" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.myPendingBookings }}</div>
+          <div class="stat-label">Awaiting approval</div>
+        </div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-icon si-green"><lucide-icon [img]="Icons.DoorOpen" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.activeBoardrooms }}</div>
+          <div class="stat-label">Available rooms</div>
+        </div>
+      </div>
+      <div class="stat-card accent-rose">
+        <div class="stat-icon si-rose"><lucide-icon [img]="Icons.Bell" class="si-icon" /></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ s.unreadNotifications }}</div>
+          <div class="stat-label">Unread notifications</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Your upcoming bookings</h2>
+      @if (s.upcomingBookings.length === 0) {
+        <div class="empty-inner">
+          <lucide-icon [img]="Icons.CalendarDays" class="empty-lucide-icon" />
+          <p>No upcoming bookings. <a [routerLink]="['/employee/bookings']">Book a room</a></p>
+        </div>
+      } @else {
+        <ol class="upcoming-list">
+          @for (b of s.upcomingBookings; track b.id) {
+            <li class="upcoming-item">
+              <div class="upcoming-time">{{ b.startTime | date:'dd MMM · HH:mm' }}</div>
+              <div class="upcoming-detail">
+                <strong>{{ b.title }}</strong>
+                <span class="upcoming-room">{{ b.boardroomName }}</span>
+              </div>
+              <span class="status status-{{ b.status }}">{{ b.status }}</span>
+            </li>
+          }
+        </ol>
+      }
+    </div>
+  }
+</section>

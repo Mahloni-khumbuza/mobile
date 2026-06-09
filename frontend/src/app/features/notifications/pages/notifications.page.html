@@ -1,0 +1,104 @@
+<section class="page">
+  <header class="head">
+    <div>
+      <h1>
+        Notifications
+        @if (unreadCount() > 0) {
+          <span class="unread-badge">{{ unreadCount() }} unread</span>
+        }
+      </h1>
+      <p class="lede">Your personal inbox.</p>
+    </div>
+    <div class="head-actions">
+      @if (unreadCount() > 0) {
+        <button type="button" class="btn ghost" (click)="markAllRead()">Mark all read</button>
+      }
+      @if (canSend()) {
+        <button type="button" class="btn primary" (click)="toggleSend()">
+          {{ showSend() ? 'Close' : '+ Send notification' }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  @if (canSend() && showSend()) {
+    <div class="send-card">
+      <h2>Send a notification</h2>
+      <form [formGroup]="sendForm" (ngSubmit)="submitSend()" novalidate>
+        <div class="row">
+          <label class="field">
+            <span>Recipient</span>
+            <select formControlName="recipientId">
+              <option value="" disabled>Select a user…</option>
+              @for (u of recipients(); track u.id) {
+                <option [value]="u.id">{{ fullName(u) }} ({{ u.email }})</option>
+              }
+            </select>
+            @if (sendForm.controls.recipientId.touched && sendForm.controls.recipientId.invalid) {
+              <small class="error">Pick a recipient.</small>
+            }
+          </label>
+          <label class="field">
+            <span>Type</span>
+            <select formControlName="type">
+              @for (opt of typeOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>Title</span>
+          <input type="text" formControlName="title" maxlength="200" />
+          @if (sendForm.controls.title.touched && sendForm.controls.title.invalid) {
+            <small class="error">Title is required (2–200 characters).</small>
+          }
+        </label>
+        <label class="field">
+          <span>Message</span>
+          <textarea formControlName="message" rows="3" maxlength="2000"></textarea>
+          @if (sendForm.controls.message.touched && sendForm.controls.message.invalid) {
+            <small class="error">Message is required.</small>
+          }
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" (click)="toggleSend()">Cancel</button>
+          <button type="submit" class="btn primary" [disabled]="sending()">
+            {{ sending() ? 'Sending…' : 'Send' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <div class="list">
+    @if (loading()) {
+      <app-spinner label="Loading…" />
+    } @else if (notifications().length === 0) {
+      <div class="empty">No notifications yet.</div>
+    } @else {
+      @for (note of notifications(); track note.id) {
+        <article class="note" [class.unread]="!note.isRead" (click)="markRead(note)">
+          <div class="note-head">
+            <span class="type-chip type-{{ note.type }}">{{ note.type.replace('_', ' ') }}</span>
+            <h3>{{ note.title }}</h3>
+            <span class="meta">{{ note.createdAt | date: 'short' }}</span>
+            <button
+              type="button"
+              class="link danger"
+              (click)="$event.stopPropagation(); remove(note)"
+              aria-label="Delete notification"
+            >
+              ✕
+            </button>
+          </div>
+          <p class="message">{{ note.message }}</p>
+        </article>
+      }
+    }
+  </div>
+</section>

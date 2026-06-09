@@ -1,0 +1,138 @@
+<section class="page">
+  <header class="head">
+    <div>
+      <h1>Boardroom Blocks</h1>
+      <p class="lede">Mark a boardroom as unavailable (e.g. maintenance). Active blocks prevent new bookings from overlapping the window.</p>
+    </div>
+    <button type="button" class="btn primary" (click)="toggleCreate()">
+      {{ showCreate() ? 'Close' : '+ New block' }}
+    </button>
+  </header>
+
+  @if (error(); as err) {
+    <div class="banner error">{{ err }}</div>
+  }
+
+  <!-- ── Create form ──────────────────────────────────────────────────────── -->
+  @if (showCreate()) {
+    <div class="create-card">
+      <h2>New block</h2>
+      <form [formGroup]="createForm" (ngSubmit)="submitCreate()" novalidate>
+        <label class="field">
+          <span>Boardroom</span>
+          <select formControlName="boardroomId">
+            <option value="" disabled>Select a boardroom…</option>
+            @for (r of boardrooms(); track r.id) {
+              <option [value]="r.id">{{ r.name }}</option>
+            }
+          </select>
+          @if (createForm.controls.boardroomId.touched && createForm.controls.boardroomId.invalid) {
+            <small class="error">Pick a boardroom.</small>
+          }
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>Start</span>
+            <input type="datetime-local" formControlName="startTime" />
+          </label>
+          <label class="field">
+            <span>End</span>
+            <input type="datetime-local" formControlName="endTime" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Reason</span>
+          <input type="text" formControlName="reason" maxlength="200" placeholder="e.g. HVAC maintenance" />
+          @if (createForm.controls.reason.touched && createForm.controls.reason.invalid) {
+            <small class="error">Reason is required (2–200 characters).</small>
+          }
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" (click)="toggleCreate()">Cancel</button>
+          <button type="submit" class="btn primary" [disabled]="saving()">
+            {{ saving() ? 'Saving…' : 'Create block' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- ── Edit form ────────────────────────────────────────────────────────── -->
+  @if (editingBlock(); as block) {
+    <div class="create-card editing">
+      <div class="edit-head">
+        <h2>Edit block — <span class="edit-room">{{ block.boardroom.name }}</span></h2>
+        <button type="button" class="btn ghost small" (click)="cancelEdit()">Cancel</button>
+      </div>
+      <form [formGroup]="editForm" (ngSubmit)="submitEdit()" novalidate>
+        <div class="row">
+          <label class="field">
+            <span>Start</span>
+            <input type="datetime-local" formControlName="startTime" />
+          </label>
+          <label class="field">
+            <span>End</span>
+            <input type="datetime-local" formControlName="endTime" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Reason</span>
+          <input type="text" formControlName="reason" maxlength="200" />
+          @if (editForm.controls.reason.touched && editForm.controls.reason.invalid) {
+            <small class="error">Reason is required (2–200 characters).</small>
+          }
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" (click)="cancelEdit()">Cancel</button>
+          <button type="submit" class="btn primary" [disabled]="saving()">
+            {{ saving() ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- ── Blocks table ─────────────────────────────────────────────────────── -->
+  <div class="list">
+    @if (loading()) {
+      <app-spinner label="Loading…" />
+    } @else if (blocks().length === 0) {
+      <div class="empty">No active blocks.</div>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Boardroom</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (b of blocks(); track b.id) {
+            <tr [class.row-editing]="editingBlock()?.id === b.id" [class.row-inactive]="!b.isActive">
+              <td><strong>{{ b.boardroom.name }}</strong></td>
+              <td class="small">{{ b.startTime | date: 'MMM d, h:mm a' }}</td>
+              <td class="small">{{ b.endTime | date: 'MMM d, h:mm a' }}</td>
+              <td class="muted">{{ b.reason }}</td>
+              <td>
+                <span class="badge" [class.badge-active]="b.isActive" [class.badge-inactive]="!b.isActive">
+                  {{ b.isActive ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button type="button" class="link" (click)="openEdit(b)">Edit</button>
+                <button type="button" class="link" [class.link-warning]="b.isActive" [class.link-success]="!b.isActive" (click)="toggleActive(b)">
+                  {{ b.isActive ? 'Deactivate' : 'Activate' }}
+                </button>
+                <button type="button" class="link danger" (click)="remove(b)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</section>

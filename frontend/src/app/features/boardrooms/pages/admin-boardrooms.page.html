@@ -1,0 +1,171 @@
+<section class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="page-head">
+    <div>
+      <h1>Boardrooms</h1>
+      <p class="lede">Create, update and manage the rooms employees can browse and book.</p>
+    </div>
+    @if (!showForm()) {
+      <button type="button" class="btn-new" (click)="openCreate()">+ New Boardroom</button>
+    }
+  </header>
+
+  @if (error(); as err) {
+    <div class="alert-error">{{ err }}</div>
+  }
+
+  <!-- ── Inline form ─────────────────────────────────────────────────────── -->
+  @if (showForm()) {
+    <div class="form-card">
+      <div class="form-card-header">
+        <div>
+          <h2 class="form-card-title">{{ isEdit() ? 'Edit Boardroom' : 'New Boardroom' }}</h2>
+          <p class="form-card-sub">Fields marked * are required.</p>
+        </div>
+        <button class="btn-close" type="button" (click)="closeForm()" title="Close">&#x2715;</button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="form-body">
+
+        <div class="f-row">
+          <label class="f-field f-grow">
+            <span class="f-label">Name *</span>
+            <input type="text" formControlName="name" maxlength="80" placeholder="e.g. Maple Boardroom" />
+            @if (form.controls.name.touched && form.controls.name.invalid) {
+              <span class="f-error">Name is required (2–80 characters).</span>
+            }
+          </label>
+          <label class="f-field f-small">
+            <span class="f-label">Capacity *</span>
+            <input type="number" formControlName="capacity" min="1" max="1000" placeholder="12" />
+            @if (form.controls.capacity.touched && form.controls.capacity.invalid) {
+              <span class="f-error">Enter a number between 1 and 1000.</span>
+            }
+          </label>
+        </div>
+
+        <div class="f-row">
+          <label class="f-field">
+            <span class="f-label">Location <span class="f-opt">(optional)</span></span>
+            <input type="text" formControlName="location" maxlength="255" placeholder="e.g. Floor 3 / East Wing" />
+          </label>
+          <label class="f-field">
+            <span class="f-label">Description <span class="f-opt">(optional)</span></span>
+            <input type="text" formControlName="description" maxlength="1000" placeholder="Features, view, equipment notes…" />
+          </label>
+        </div>
+
+        <!-- Toggles — only shown when editing -->
+        @if (isEdit()) {
+          <div class="f-toggles">
+            <label class="f-toggle">
+              <input type="checkbox" formControlName="isActive" />
+              <div class="f-toggle-text">
+                <strong>Active</strong>
+                <span>Visible and bookable by employees</span>
+              </div>
+            </label>
+            <label class="f-toggle">
+              <input type="checkbox" formControlName="requiresApproval" />
+              <div class="f-toggle-text">
+                <strong>Requires approval</strong>
+                <span>Bookings start as Pending and need admin sign-off before Confirmed</span>
+              </div>
+            </label>
+          </div>
+        }
+
+        <!-- Amenities -->
+        <div class="f-field">
+          <span class="f-label">Amenities <span class="f-opt">(optional)</span></span>
+          @if (amenities().length === 0) {
+            <div class="no-amenities">
+              No amenities defined yet.
+              <a [routerLink]="amenitiesPath">Create some on the Amenities page</a> first.
+            </div>
+          } @else {
+            <div class="chip-list">
+              @for (a of amenities(); track a.id) {
+                <button type="button" class="chip"
+                  [class.selected]="isAmenitySelected(a.id)"
+                  (click)="toggleAmenity(a.id)">
+                  {{ a.name }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="f-actions">
+          <button type="button" class="btn-cancel" (click)="closeForm()">Cancel</button>
+          <button type="submit" class="btn-save" [disabled]="saving()">
+            {{ saving() ? 'Saving…' : (isEdit() ? 'Save changes' : 'Create boardroom') }}
+          </button>
+        </div>
+
+      </form>
+    </div>
+  }
+
+  <!-- ── Boardroom list ──────────────────────────────────────────────────── -->
+  @if (!showForm()) {
+    @if (loading()) {
+      <app-spinner label="Loading boardrooms…" />
+    } @else if (boardrooms().length === 0) {
+      <div class="empty-state">
+        <p class="empty-title">No boardrooms yet</p>
+        <p class="empty-sub">Click <strong>+ New Boardroom</strong> to add your first room.</p>
+      </div>
+    } @else {
+      <div class="room-list">
+        @for (r of boardrooms(); track r.id) {
+          <div class="room-card">
+
+            <div class="room-card-main">
+              <div class="room-avatar">{{ r.name[0] }}</div>
+              <div class="room-info">
+                <div class="room-name">{{ r.name }}</div>
+                @if (r.location) { <div class="room-meta">{{ r.location }}</div> }
+                @if (r.description) { <div class="room-desc">{{ r.description }}</div> }
+              </div>
+              <div class="room-stats">
+                <div class="room-stat">
+                  <span class="stat-num">{{ r.capacity }}</span>
+                  <span class="stat-lbl">seats</span>
+                </div>
+                <div class="room-stat">
+                  <span class="stat-num">{{ r.amenities.length }}</span>
+                  <span class="stat-lbl">amenities</span>
+                </div>
+              </div>
+              <div class="room-status-wrap">
+                <span class="status-dot" [class.active]="r.isActive" [class.inactive]="!r.isActive">
+                  {{ r.isActive ? 'Active' : 'Inactive' }}
+                </span>
+                @if (r.requiresApproval) {
+                  <span class="approval-tag">Approval required</span>
+                }
+              </div>
+              <div class="room-actions">
+                <a class="icon-btn" title="View detail" [routerLink]="[portalBase + '/boardrooms', r.id]">👁</a>
+                <button class="icon-btn" title="Edit" (click)="openEdit(r)">✎</button>
+                <button class="icon-btn icon-btn-danger" title="Delete" (click)="remove(r)">✕</button>
+              </div>
+            </div>
+
+            @if (r.amenities.length > 0) {
+              <div class="room-amenities">
+                @for (a of r.amenities; track a.id) {
+                  <span class="amenity-tag">{{ a.name }}</span>
+                }
+              </div>
+            }
+
+          </div>
+        }
+      </div>
+    }
+  }
+
+</section>
