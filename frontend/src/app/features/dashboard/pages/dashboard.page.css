@@ -159,3 +159,52 @@
 .empty-icon { font-size: 36px; display: block; margin-bottom: 8px; color: #cbd5e1; }
 .empty-inner a { color: #4f46e5; text-decoration: none; font-weight: 600; }
 .empty-inner a:hover { text-decoration: underline; }
+
+/* ── Reporting section ───────────────────────────── */
+.section-heading {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.report-summary { grid-template-columns: repeat(3, 1fr); }
+
+.card-title-icon { width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px; }
+
+/* Room utilisation bars */
+.util-table { display: flex; flex-direction: column; gap: 10px; }
+.util-row { display: grid; grid-template-columns: 130px 1fr 40px; gap: 10px; align-items: center; font-size: 0.82rem; }
+.util-name { color: #475569; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.util-bar-wrap { height: 8px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.util-bar { height: 100%; background: #4f46e5; border-radius: 999px; min-width: 2px; transition: width 0.5s; }
+.util-pct { font-size: 0.78rem; font-weight: 700; color: #4f46e5; text-align: right; }
+
+/* Peak hours chart */
+.peak-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-bottom: 20px; overflow-x: auto; }
+.peak-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 28px; height: 100%; position: relative; }
+.peak-bar-wrap { width: 100%; flex: 1; display: flex; align-items: flex-end; }
+.peak-bar { width: 100%; background: #6366f1; border-radius: 4px 4px 0 0; min-height: 4px; transition: height 0.4s; }
+.peak-label { font-size: 0.62rem; color: #94a3b8; margin-top: 4px; white-space: nowrap; }
+
+/* Rank list */
+.rank-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.rank-item { display: flex; align-items: center; gap: 10px; font-size: 0.84rem; }
+.rank-pos { width: 22px; height: 22px; border-radius: 50%; background: #eef2ff; color: #4f46e5; font-weight: 700; font-size: 0.72rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rank-name { flex: 1; color: #334155; font-weight: 500; }
+.rank-count { color: #64748b; font-size: 0.78rem; }
+
+/* Department table */
+.dept-table { display: flex; flex-direction: column; }
+.dept-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.84rem; }
+.dept-row:last-child { border-bottom: none; }
+.dept-name { color: #334155; font-weight: 500; }
+.dept-count { font-weight: 700; color: #4f46e5; }
+
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .report-summary { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-grid { grid-template-columns: 1fr; }
+}
