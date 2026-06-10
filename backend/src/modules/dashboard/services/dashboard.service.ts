@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, MoreThanOrEqual, Repository } from 'typeorm';
 import { Boardroom } from '../../boardrooms/entities/boardroom.entity';
@@ -19,7 +19,7 @@ import {
   RoomUtilisationDto,
 } from '../dto/reporting.dto';
 
-const OPERATING_HOURS_PER_DAY = 10; // 08:00–18:00
+const OPERATING_HOURS_PER_DAY = 10;
 
 @Injectable()
 export class DashboardService {
@@ -62,22 +62,22 @@ export class DashboardService {
         this.boardroomsRepo.count(),
         this.boardroomsRepo.count({ where: { isActive: true } }),
         this.bookingsRepo.count(),
-        this.bookingsRepo.count({ where: { status: BookingStatus.Pending } }),
-        this.bookingsRepo.count({ where: { status: BookingStatus.Confirmed } }),
-        this.bookingsRepo.count({ where: { status: BookingStatus.Cancelled } }),
-        this.bookingsRepo.count({ where: { status: BookingStatus.Completed } }),
+        this.bookingsRepo.count({ where: { status: BookingStatus.PENDING_APPROVAL } }),
+        this.bookingsRepo.count({ where: { status: BookingStatus.APPROVED } }),
+        this.bookingsRepo.count({ where: { status: BookingStatus.CANCELLED } }),
+        this.bookingsRepo.count({ where: { status: BookingStatus.COMPLETED } }),
         this.bookingsRepo
           .createQueryBuilder('b')
-          .where('b.startTime >= :start AND b.startTime < :end', { start: startOfToday, end: endOfToday })
+          .where('b.startDateTime >= :start AND b.startDateTime < :end', { start: startOfToday, end: endOfToday })
           .getCount(),
         this.bookingsRepo
           .createQueryBuilder('b')
-          .where('b.startTime >= :start AND b.startTime < :end', { start: startOfToday, end: weekFromNow })
+          .where('b.startDateTime >= :start AND b.startDateTime < :end', { start: startOfToday, end: weekFromNow })
           .getCount(),
         this.bookingsRepo.find({
-          where: { startTime: MoreThanOrEqual(now), status: BookingStatus.Confirmed },
+          where: { startDateTime: MoreThanOrEqual(now), status: BookingStatus.APPROVED },
           relations: { boardroom: true },
-          order: { startTime: 'ASC' },
+          order: { startDateTime: 'ASC' },
           take: 5,
         }),
       ]);
@@ -92,7 +92,9 @@ export class DashboardService {
         bookingsThisWeek,
         upcomingBookings: upcoming.map((b) => this.toUpcoming(b)),
       };
-    } catch (err) { return this.rethrow(err, 'getAdminStats'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getEmployeeStats(userId: string): Promise<EmployeeDashboardStatsDto> {
@@ -100,14 +102,14 @@ export class DashboardService {
       const now = new Date();
       const [myUpcoming, myPending, activeBoardrooms, upcoming, unread] = await Promise.all([
         this.bookingsRepo.count({
-          where: { bookedById: userId, status: BookingStatus.Confirmed, startTime: MoreThanOrEqual(now) },
+          where: { bookedByUserId: userId, status: BookingStatus.APPROVED, startDateTime: MoreThanOrEqual(now) },
         }),
-        this.bookingsRepo.count({ where: { bookedById: userId, status: BookingStatus.Pending } }),
+        this.bookingsRepo.count({ where: { bookedByUserId: userId, status: BookingStatus.PENDING_APPROVAL } }),
         this.boardroomsRepo.count({ where: { isActive: true } }),
         this.bookingsRepo.find({
-          where: { bookedById: userId, startTime: MoreThanOrEqual(now) },
+          where: { bookedByUserId: userId, startDateTime: MoreThanOrEqual(now) },
           relations: { boardroom: true },
-          order: { startTime: 'ASC' },
+          order: { startDateTime: 'ASC' },
           take: 5,
         }),
         this.notificationsRepo.count({ where: { recipientId: userId, isRead: false } }),
@@ -120,12 +122,9 @@ export class DashboardService {
         upcomingBookings: upcoming.map((b) => this.toUpcoming(b)),
         unreadNotifications: unread,
       };
-    } catch (err) { return this.rethrow(err, 'getEmployeeStats'); }
-  }
-
-  private rethrow(err: unknown, context: string): never {
-    this.logger.error(`Unexpected error in ${context}`, err instanceof Error ? err.stack : String(err));
-    throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getRoomUtilisation(query: ReportingQueryDto = {}): Promise<RoomUtilisationDto[]> {
@@ -139,14 +138,10 @@ export class DashboardService {
 
       for (const room of boardrooms) {
         const bookings = await this.bookingsRepo.find({
-          where: {
-            boardroomId: room.id,
-            status: BookingStatus.Confirmed,
-            startTime: Between(from, to),
-          },
+          where: { boardroomId: room.id, status: BookingStatus.APPROVED, startDateTime: Between(from, to) },
         });
         const booked = bookings.reduce((sum, b) => {
-          return sum + (b.endTime.getTime() - b.startTime.getTime()) / 60_000;
+          return sum + (b.endDateTime.getTime() - b.startDateTime.getTime()) / 60_000;
         }, 0);
         rows.push({
           boardroomId: room.id,
@@ -157,9 +152,8 @@ export class DashboardService {
         });
       }
       return rows;
-    } catch (err) {
-      this.logger.error('Unexpected error in getRoomUtilisation', err instanceof Error ? err.stack : String(err));
-      throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -168,18 +162,17 @@ export class DashboardService {
       const { from, to } = this.resolveWindow(query);
       const result = await this.bookingsRepo
         .createQueryBuilder('b')
-        .leftJoin('b.bookedBy', 'u')
-        .select('COALESCE(u.department, \'Unknown\')', 'department')
+        .leftJoin('b.bookedByUser', 'u')
+        .select("COALESCE(u.department, 'Unknown')", 'department')
         .addSelect('COUNT(b.id)', 'bookingCount')
-        .where('b.startTime BETWEEN :from AND :to', { from, to })
-        .groupBy('COALESCE(u.department, \'Unknown\')')
+        .where('b.startDateTime BETWEEN :from AND :to', { from, to })
+        .groupBy("COALESCE(u.department, 'Unknown')")
         .orderBy('"bookingCount"', 'DESC')
         .getRawMany<{ department: string; bookingCount: string }>();
 
       return result.map((r) => ({ department: r.department, bookingCount: Number(r.bookingCount) }));
-    } catch (err) {
-      this.logger.error('Unexpected error in getBookingsByDepartment', err instanceof Error ? err.stack : String(err));
-      throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -188,17 +181,16 @@ export class DashboardService {
       const { from, to } = this.resolveWindow(query);
       const result = await this.bookingsRepo
         .createQueryBuilder('b')
-        .select('EXTRACT(HOUR FROM b.start_time)', 'hour')
+        .select('EXTRACT(HOUR FROM b.start_date_time)', 'hour')
         .addSelect('COUNT(b.id)', 'bookingCount')
-        .where('b.startTime BETWEEN :from AND :to', { from, to })
-        .groupBy('EXTRACT(HOUR FROM b.start_time)')
-        .orderBy('EXTRACT(HOUR FROM b.start_time)', 'ASC')
+        .where('b.startDateTime BETWEEN :from AND :to', { from, to })
+        .groupBy('EXTRACT(HOUR FROM b.start_date_time)')
+        .orderBy('EXTRACT(HOUR FROM b.start_date_time)', 'ASC')
         .getRawMany<{ hour: string; bookingCount: string }>();
 
       return result.map((r) => ({ hour: Number(r.hour), bookingCount: Number(r.bookingCount) }));
-    } catch (err) {
-      this.logger.error('Unexpected error in getPeakHours', err instanceof Error ? err.stack : String(err));
-      throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -216,19 +208,18 @@ export class DashboardService {
       const [totalBookings, totalCancelled, noShowEstimate] = await Promise.all([
         this.bookingsRepo
           .createQueryBuilder('b')
-          .where('b.startTime BETWEEN :from AND :to', { from, to })
+          .where('b.startDateTime BETWEEN :from AND :to', { from, to })
           .getCount(),
         this.bookingsRepo
           .createQueryBuilder('b')
-          .where('b.startTime BETWEEN :from AND :to', { from, to })
-          .andWhere('b.status = :status', { status: BookingStatus.Cancelled })
+          .where('b.startDateTime BETWEEN :from AND :to', { from, to })
+          .andWhere('b.status = :status', { status: BookingStatus.CANCELLED })
           .getCount(),
-        // confirmed bookings whose endTime has passed but never marked completed
         this.bookingsRepo
           .createQueryBuilder('b')
-          .where('b.startTime BETWEEN :from AND :to', { from, to })
-          .andWhere('b.status = :status', { status: BookingStatus.Confirmed })
-          .andWhere('b.endTime < :now', { now: new Date() })
+          .where('b.startDateTime BETWEEN :from AND :to', { from, to })
+          .andWhere('b.status = :status', { status: BookingStatus.APPROVED })
+          .andWhere('b.endDateTime < :now', { now: new Date() })
           .getCount(),
       ]);
 
@@ -238,9 +229,8 @@ export class DashboardService {
         cancellationRatePct: totalBookings > 0 ? Math.round((totalCancelled / totalBookings) * 100) : 0,
         noShowEstimate,
       };
-    } catch (err) {
-      this.logger.error('Unexpected error in getCancellationReport', err instanceof Error ? err.stack : String(err));
-      throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -253,7 +243,7 @@ export class DashboardService {
         .select('b.boardroomId', 'boardroomId')
         .addSelect('room.name', 'boardroomName')
         .addSelect('COUNT(b.id)', 'bookingCount')
-        .where('b.startTime BETWEEN :from AND :to', { from, to })
+        .where('b.startDateTime BETWEEN :from AND :to', { from, to })
         .groupBy('b.boardroomId, room.name')
         .orderBy('"bookingCount"', order)
         .limit(10)
@@ -264,9 +254,8 @@ export class DashboardService {
         boardroomName: r.boardroomName,
         bookingCount: Number(r.bookingCount),
       }));
-    } catch (err) {
-      this.logger.error(`Unexpected error in getRoomRanking(${order})`, err instanceof Error ? err.stack : String(err));
-      throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -282,8 +271,8 @@ export class DashboardService {
     return {
       id: b.id,
       title: b.title,
-      startTime: b.startTime,
-      endTime: b.endTime,
+      startTime: b.startDateTime,
+      endTime: b.endDateTime,
       boardroomName: b.boardroom?.name ?? 'Unknown',
       status: b.status,
     };

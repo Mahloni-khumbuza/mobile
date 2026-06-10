@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Amenity } from '../entities/amenity.entity';
@@ -17,7 +17,9 @@ export class AmenitiesService {
   async findAll(): Promise<Amenity[]> {
     try {
       return await this.amenitiesRepository.find({ order: { name: 'ASC' } });
-    } catch (err) { return this.rethrow(err, 'findAll amenities'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async findOne(id: string): Promise<Amenity> {
@@ -25,7 +27,9 @@ export class AmenitiesService {
       const amenity = await this.amenitiesRepository.findOne({ where: { id } });
       if (!amenity) throw new NotFoundException(`Amenity ${id} not found`);
       return amenity;
-    } catch (err) { return this.rethrow(err, 'findOne amenity'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async create(dto: CreateAmenityDto): Promise<Amenity> {
@@ -38,7 +42,9 @@ export class AmenitiesService {
         icon: dto.icon ?? null,
       });
       return await this.amenitiesRepository.save(amenity);
-    } catch (err) { return this.rethrow(err, 'create amenity'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async update(id: string, dto: UpdateAmenityDto): Promise<Amenity> {
@@ -52,19 +58,17 @@ export class AmenitiesService {
       if (dto.description !== undefined) amenity.description = dto.description;
       if (dto.icon !== undefined) amenity.icon = dto.icon;
       return await this.amenitiesRepository.save(amenity);
-    } catch (err) { return this.rethrow(err, 'update amenity'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<void> {
     try {
       const result = await this.amenitiesRepository.delete(id);
       if (result.affected === 0) throw new NotFoundException(`Amenity ${id} not found`);
-    } catch (err) { return this.rethrow(err, 'remove amenity'); }
-  }
-
-  private rethrow(err: unknown, context: string): never {
-    if (err instanceof ConflictException || err instanceof NotFoundException) throw err;
-    this.logger.error(`Unexpected error in ${context}`, err instanceof Error ? err.stack : String(err));
-    throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
+    }
   }
 }
