@@ -36,36 +36,40 @@ export class BookingReminderScheduler {
 
       const upcoming = await this.repo.find({
         where: {
-          status: BookingStatus.Confirmed,
-          startTime: Between(windowStart, windowEnd),
+          status: BookingStatus.APPROVED,
+          startDateTime: Between(windowStart, windowEnd),
         },
-        relations: { bookedBy: true, boardroom: true },
+        relations: { bookedByUser: true, boardroom: true },
       });
 
       for (const booking of upcoming) {
-        if (!booking.bookedBy?.email) continue;
+        if (!booking.bookedByUser?.email) continue;
+
         const ctx = {
-          userName: `${booking.bookedBy.firstName} ${booking.bookedBy.lastName}`,
+          userName: `${booking.bookedByUser.firstName} ${booking.bookedByUser.lastName}`,
           boardroomName: booking.boardroom?.name ?? 'Unknown',
           bookingTitle: booking.title,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
+          startTime: booking.startDateTime,
+          endTime: booking.endDateTime,
           reminderMinutes,
         };
+
         await this.mail.sendMail({
-          to: booking.bookedBy.email,
+          to: booking.bookedByUser.email,
           subject: `Reminder: "${booking.title}" starts in ${reminderMinutes} minutes`,
           html: bookingReminderHtml(ctx),
         });
-        if (booking.bookedById) {
+
+        if (booking.bookedByUserId) {
           await this.notifications.notify({
-            recipientId: booking.bookedById,
+            recipientId: booking.bookedByUserId,
             type: NotificationType.BookingReminder,
             title: `Reminder: booking in ${reminderMinutes} min`,
             message: `"${booking.title}" in ${booking.boardroom?.name ?? 'your room'} starts soon.`,
           });
         }
-        this.logger.log(`Reminder sent for booking ${booking.id} to ${booking.bookedBy.email}`);
+
+        this.logger.log(`Reminder sent for booking ${booking.id} to ${booking.bookedByUser.email}`);
       }
     } catch (err) {
       this.logger.error('Reminder scheduler error', err instanceof Error ? err.stack : String(err));

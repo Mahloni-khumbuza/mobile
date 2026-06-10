@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +17,8 @@ export interface JwtPayload {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -25,25 +27,29 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
-    const user = await this.usersService.findByEmail(dto.email);
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid email or password');
+    try {
+      const user = await this.usersService.findByEmail(dto.email);
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
+      if (!passwordMatches) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      await this.auditLogs.record({
+        action: 'auth.login',
+        entity: 'user',
+        entityId: user.id,
+        actorId: user.id,
+        metadata: { email: user.email, role: user.role?.name ?? null },
+      });
+
+      return this.issueToken(user);
+    } catch (error) {
+      throw error;
     }
-
-    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    await this.auditLogs.record({
-      action: 'auth.login',
-      entity: 'user',
-      entityId: user.id,
-      actorId: user.id,
-      metadata: { email: user.email, role: user.role?.name ?? null },
-    });
-
-    return this.issueToken(user);
   }
 
   private issueToken(user: User): LoginResponseDto {

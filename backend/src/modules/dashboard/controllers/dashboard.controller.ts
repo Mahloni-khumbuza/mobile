@@ -1,13 +1,13 @@
-import { Controller, ForbiddenException, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../shared/decorators/current-user.decorator';
 import { Permissions } from '../../../shared/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../../shared/guards/permissions.guard';
 import { Permission } from '../../../shared/constants/permissions';
-import {
-  DashboardStatsDto,
-  EmployeeDashboardStatsDto,
-} from '../dto/dashboard-stats.dto';
+import type { JwtPayload } from '../../auth/services/auth.service';
+import { DashboardService } from '../services/dashboard.service';
+import { DashboardStatsDto, EmployeeDashboardStatsDto } from '../dto/dashboard-stats.dto';
 import {
   BookingsByDepartmentDto,
   CancellationReportDto,
@@ -16,13 +16,8 @@ import {
   RoomUsageRankDto,
   RoomUtilisationDto,
 } from '../dto/reporting.dto';
-import { DashboardService } from '../services/dashboard.service';
 
 const ADMIN_ROLES = new Set(['SuperAdmin', 'Admin', 'FacilitiesManager']);
-
-interface AuthedRequest {
-  user: { sub: string; role: string | null };
-}
 
 @ApiTags('dashboard')
 @ApiBearerAuth()
@@ -35,8 +30,8 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Get admin dashboard stats', operationId: 'getAdminDashboard' })
   @ApiOkResponse({ type: DashboardStatsDto })
-  getAdmin(@Req() req: AuthedRequest): Promise<DashboardStatsDto> {
-    this.requireAdmin(req);
+  getAdmin(@CurrentUser() user: JwtPayload): Promise<DashboardStatsDto> {
+    this.requireAdmin(user);
     return this.service.getAdminStats();
   }
 
@@ -44,16 +39,19 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Get personal dashboard stats', operationId: 'getMyDashboard' })
   @ApiOkResponse({ type: EmployeeDashboardStatsDto })
-  getMe(@Req() req: AuthedRequest): Promise<EmployeeDashboardStatsDto> {
-    return this.service.getEmployeeStats(req.user.sub);
+  getMe(@CurrentUser() user: JwtPayload): Promise<EmployeeDashboardStatsDto> {
+    return this.service.getEmployeeStats(user.sub);
   }
 
   @Get('reports/utilisation')
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Room utilisation report', operationId: 'getUtilisationReport' })
   @ApiOkResponse({ type: [RoomUtilisationDto] })
-  getUtilisation(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUtilisationDto[]> {
-    this.requireAdmin(req);
+  getUtilisation(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<RoomUtilisationDto[]> {
+    this.requireAdmin(user);
     return this.service.getRoomUtilisation(query);
   }
 
@@ -61,8 +59,11 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Bookings grouped by department', operationId: 'getBookingsByDepartment' })
   @ApiOkResponse({ type: [BookingsByDepartmentDto] })
-  getByDepartment(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<BookingsByDepartmentDto[]> {
-    this.requireAdmin(req);
+  getByDepartment(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<BookingsByDepartmentDto[]> {
+    this.requireAdmin(user);
     return this.service.getBookingsByDepartment(query);
   }
 
@@ -70,8 +71,11 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Peak booking hours', operationId: 'getPeakHours' })
   @ApiOkResponse({ type: [PeakHourDto] })
-  getPeakHours(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<PeakHourDto[]> {
-    this.requireAdmin(req);
+  getPeakHours(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<PeakHourDto[]> {
+    this.requireAdmin(user);
     return this.service.getPeakHours(query);
   }
 
@@ -79,8 +83,11 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Most-used boardrooms', operationId: 'getMostUsedRooms' })
   @ApiOkResponse({ type: [RoomUsageRankDto] })
-  getMostUsed(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUsageRankDto[]> {
-    this.requireAdmin(req);
+  getMostUsed(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<RoomUsageRankDto[]> {
+    this.requireAdmin(user);
     return this.service.getMostUsedRooms(query);
   }
 
@@ -88,8 +95,11 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Least-used boardrooms', operationId: 'getLeastUsedRooms' })
   @ApiOkResponse({ type: [RoomUsageRankDto] })
-  getLeastUsed(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<RoomUsageRankDto[]> {
-    this.requireAdmin(req);
+  getLeastUsed(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<RoomUsageRankDto[]> {
+    this.requireAdmin(user);
     return this.service.getLeastUsedRooms(query);
   }
 
@@ -97,13 +107,16 @@ export class DashboardController {
   @Permissions(Permission.DASHBOARD_READ)
   @ApiOperation({ summary: 'Cancellation and no-show report', operationId: 'getCancellationReport' })
   @ApiOkResponse({ type: CancellationReportDto })
-  getCancellations(@Req() req: AuthedRequest, @Query() query: ReportingQueryDto): Promise<CancellationReportDto> {
-    this.requireAdmin(req);
+  getCancellations(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ReportingQueryDto,
+  ): Promise<CancellationReportDto> {
+    this.requireAdmin(user);
     return this.service.getCancellationReport(query);
   }
 
-  private requireAdmin(req: AuthedRequest): void {
-    if (!req.user.role || !ADMIN_ROLES.has(req.user.role)) {
+  private requireAdmin(user: JwtPayload): void {
+    if (!user.role || !ADMIN_ROLES.has(user.role)) {
       throw new ForbiddenException('Admin-tier role required');
     }
   }

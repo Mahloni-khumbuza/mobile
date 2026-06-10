@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
@@ -19,7 +19,9 @@ export class SystemSettingsService {
   async findAll(): Promise<SystemSetting[]> {
     try {
       return await this.repo.find({ order: { key: 'ASC' } });
-    } catch (err) { return this.rethrow(err, 'findAll settings'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async findOne(id: string): Promise<SystemSetting> {
@@ -27,7 +29,9 @@ export class SystemSettingsService {
       const setting = await this.repo.findOne({ where: { id } });
       if (!setting) throw new NotFoundException(`Setting ${id} not found`);
       return setting;
-    } catch (err) { return this.rethrow(err, 'findOne setting'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   findByKey(key: string): Promise<SystemSetting | null> {
@@ -48,7 +52,9 @@ export class SystemSettingsService {
         after: { key: saved.key, value: saved.value },
       });
       return saved;
-    } catch (err) { return this.rethrow(err, 'create setting'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async update(id: string, dto: UpdateSystemSettingDto, actorId?: string): Promise<SystemSetting> {
@@ -67,7 +73,9 @@ export class SystemSettingsService {
         after: { key: saved.key, value: saved.value },
       });
       return saved;
-    } catch (err) { return this.rethrow(err, 'update setting'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async remove(id: string, actorId?: string): Promise<void> {
@@ -82,12 +90,8 @@ export class SystemSettingsService {
         actorId: actorId ?? null,
         before: { key: setting.key, value: setting.value },
       });
-    } catch (err) { return this.rethrow(err, 'remove setting'); }
-  }
-
-  private rethrow(err: unknown, context: string): never {
-    if (err instanceof ConflictException || err instanceof NotFoundException) throw err;
-    this.logger.error(`Unexpected error in ${context}`, err instanceof Error ? err.stack : String(err));
-    throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
+    }
   }
 }

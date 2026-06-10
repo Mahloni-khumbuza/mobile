@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from '../entities/notification.entity';
@@ -23,13 +23,17 @@ export class NotificationsService {
   async listForUser(userId: string): Promise<Notification[]> {
     try {
       return await this.repo.find({ where: { recipientId: userId }, order: { createdAt: 'DESC' }, take: 100 });
-    } catch (err) { return this.rethrow(err, 'listForUser'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async countUnreadForUser(userId: string): Promise<number> {
     try {
       return await this.repo.count({ where: { recipientId: userId, isRead: false } });
-    } catch (err) { return this.rethrow(err, 'countUnreadForUser'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async create(dto: CreateNotificationDto): Promise<Notification> {
@@ -42,7 +46,9 @@ export class NotificationsService {
         isRead: false,
       });
       return await this.repo.save(entry);
-    } catch (err) { return this.rethrow(err, 'create notification'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async notify(input: NotifyInput): Promise<Notification | null> {
@@ -55,10 +61,10 @@ export class NotificationsService {
         isRead: false,
       });
       return await this.repo.save(entry);
-    } catch (err) {
+    } catch (error) {
       this.logger.warn(
         `Failed to send notification "${input.title}" to ${input.recipientId}: ${
-          err instanceof Error ? err.message : String(err)
+          error instanceof Error ? error.message : String(error)
         }`,
       );
       return null;
@@ -71,26 +77,26 @@ export class NotificationsService {
       if (!note) throw new NotFoundException(`Notification ${id} not found`);
       note.isRead = true;
       return await this.repo.save(note);
-    } catch (err) { return this.rethrow(err, 'markRead'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async markAllRead(userId: string): Promise<{ updated: number }> {
     try {
       const result = await this.repo.update({ recipientId: userId, isRead: false }, { isRead: true });
       return { updated: result.affected ?? 0 };
-    } catch (err) { return this.rethrow(err, 'markAllRead'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async remove(id: string, userId: string): Promise<void> {
     try {
       const result = await this.repo.delete({ id, recipientId: userId });
       if (result.affected === 0) throw new NotFoundException(`Notification ${id} not found`);
-    } catch (err) { return this.rethrow(err, 'remove notification'); }
-  }
-
-  private rethrow(err: unknown, context: string): never {
-    if (err instanceof NotFoundException) throw err;
-    this.logger.error(`Unexpected error in ${context}`, err instanceof Error ? err.stack : String(err));
-    throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
+    }
   }
 }

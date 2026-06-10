@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -30,7 +29,9 @@ export class RolesService {
   async findAll(): Promise<Role[]> {
     try {
       return await this.rolesRepository.find({ order: { name: 'ASC' }, relations: { permissions: true } });
-    } catch (err) { return this.rethrow(err, 'findAll roles'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async findOne(id: string): Promise<Role> {
@@ -38,7 +39,9 @@ export class RolesService {
       const role = await this.rolesRepository.findOne({ where: { id }, relations: { permissions: true } });
       if (!role) throw new NotFoundException(`Role ${id} not found`);
       return role;
-    } catch (err) { return this.rethrow(err, 'findOne role'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async create(dto: CreateRoleDto): Promise<Role> {
@@ -48,7 +51,9 @@ export class RolesService {
       const permissions = await this.resolvePermissions(dto.permissionIds);
       const role = this.rolesRepository.create({ name: dto.name, description: dto.description ?? null, permissions });
       return await this.rolesRepository.save(role);
-    } catch (err) { return this.rethrow(err, 'create role'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async update(id: string, dto: UpdateRoleDto): Promise<Role> {
@@ -62,7 +67,9 @@ export class RolesService {
       if (dto.description !== undefined) role.description = dto.description;
       if (dto.permissionIds !== undefined) role.permissions = await this.resolvePermissions(dto.permissionIds);
       return await this.rolesRepository.save(role);
-    } catch (err) { return this.rethrow(err, 'update role'); }
+    } catch (error) {
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<void> {
@@ -73,19 +80,13 @@ export class RolesService {
         throw new ConflictException(`Cannot delete role "${role.name}" — ${inUse} user(s) still assigned`);
       }
       await this.rolesRepository.delete(role.id);
-    } catch (err) { return this.rethrow(err, 'remove role'); }
-  }
-
-  private rethrow(err: unknown, context: string): never {
-    if (err instanceof BadRequestException || err instanceof NotFoundException || err instanceof ConflictException) throw err;
-    this.logger.error(`Unexpected error in ${context}`, err instanceof Error ? err.stack : String(err));
-    throw new InternalServerErrorException('An unexpected error occurred');
+    } catch (error) {
+      throw error;
+    }
   }
 
   private async resolvePermissions(ids: string[] | undefined): Promise<Permission[]> {
-    if (!ids || ids.length === 0) {
-      return [];
-    }
+    if (!ids || ids.length === 0) return [];
     const found = await this.permissionsRepository.find({ where: { id: In(ids) } });
     if (found.length !== ids.length) {
       const foundIds = new Set(found.map((p) => p.id));
